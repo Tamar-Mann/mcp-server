@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "weather": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "C:\\computers\\to-work\\nebius\\mcp-server\\qa-report-mcp-server",
+        "run",
+        "qa_report.py"
+      ]
+    }
+  }
+}
