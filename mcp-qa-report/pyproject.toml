@@ -1,10 +1,32 @@
 [project]
-name = "qa-report-mcp-server"
+name = "qa-report-mcp"
 version = "0.1.0"
-description = "Add your description here"
+description = "MCP server providing QA and sanity checks for AI coding projects"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "httpx>=0.28.1",
     "mcp[cli]>=1.25.0",
 ]
+
+#לבדוק אם תקין וצריך
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+]
+
+[project.scripts]
+qa-report-mcp = "mcp_server.server:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[tool.uv]
+package = true
