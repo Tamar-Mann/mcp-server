@@ -214,5 +214,6 @@ New Text Document.txt
 *.local.json
 *.DS_Store
 Thumbs.db
+*.egg-info/
 
 
