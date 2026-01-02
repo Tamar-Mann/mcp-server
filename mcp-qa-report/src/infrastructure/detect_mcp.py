@@ -7,8 +7,8 @@ def detect_mcp_command(project_path: str) -> list[str] | None:
 
     # 1. pyproject.toml (Python MCP)
 
-    if (root / "pyproject.toml").exists():
-        return ["uv", "run", "python", "-m", "weather"]
+    """if (root / "pyproject.toml").exists():
+        return ["uv", "run", "python", "-m", "weather"]"""
     
     pyproject = root / "pyproject.toml"
     if pyproject.exists():
