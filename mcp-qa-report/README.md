@@ -255,8 +255,3 @@ Ideas:
 - Add optional lint/format checks (kept separate from protocol checks)
 - Export JSON report alongside text output
 
----
-
-## License
-
-MIT (or your preferred license).
