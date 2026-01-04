@@ -72,3 +72,50 @@ class MCPProcessRunner:
         self.terminate()
 
 
+
+    def peek_stdout(self, timeout: float = 0.1) -> str | None:
+        """
+        Peek at stdout without sending any input.
+        Used to detect unexpected STDIO noise before initialize.
+        """
+        if not self._proc or not self._proc.stdout:
+            return None
+
+        start = time.time()
+        while time.time() - start < timeout:
+            line = self._proc.stdout.readline()
+            if line:
+                return line.strip()
+            time.sleep(0.01)
+
+        return None
+
+
+    def send_request(self, method: str, request_id: int) -> dict | None:
+        if not self._proc or not self._proc.stdin or not self._proc.stdout:
+            return None
+
+        msg = {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": method,
+            "params": {},
+        }
+
+        self._proc.stdin.write(json.dumps(msg) + "\n")
+        self._proc.stdin.flush()
+
+        deadline = time.time() + self._timeout
+        while time.time() < deadline:
+            line = self._proc.stdout.readline()
+            if not line:
+                continue
+            try:
+                data = json.loads(line.strip())
+            except json.JSONDecodeError:
+                continue
+
+            if data.get("id") == request_id:
+                return data
+
+        return None

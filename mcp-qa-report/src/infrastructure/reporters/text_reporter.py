@@ -5,9 +5,9 @@ class TextReporter:
         lines = []
 
         for r in results:
-            status = r.status
-            lines.append(f"{status} {r.name}")
-            lines.append(f"   ↳ {r.message}")
+           status = r.status.value
+           lines.append(f"{status} {r.name}")
+           lines.append(f"   ↳ {r.message}")
 
         summary = self._summary(results)
         return "\n".join(lines + ["", summary])
