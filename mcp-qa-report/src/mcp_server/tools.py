@@ -53,6 +53,7 @@ def register(mcp: FastMCP) -> None:
 
                 except Exception as e:
                     return f"Failed writing report to file: {e}\n\n{text}"
+        return text
 
 
     @mcp.tool(name="ping", description="Health check tool. Returns ok.")
