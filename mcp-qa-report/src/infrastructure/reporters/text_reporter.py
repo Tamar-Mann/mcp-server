@@ -1,3 +1,4 @@
+import json
 from domain.models import CheckResult, CheckStatus
 
 class TextReporter:
@@ -5,16 +6,35 @@ class TextReporter:
         lines = []
 
         for r in results:
-           status = r.status.value
-           lines.append(f"{status} {r.name}")
-           lines.append(f"   ↳ {r.message}")
+            status = r.status.value
+            lines.append(f"{status} {r.name}")
+            lines.append(f"   ↳ {r.message}")
 
         summary = self._summary(results)
         return "\n".join(lines + ["", summary])
 
-    def _summary(self, results: list[CheckResult]) -> str:
+    def to_json_obj(self, results: list[CheckResult]) -> dict:
+        return {
+            "summary": self._summary_obj(results),
+            "results": [
+                {
+                    "name": r.name,
+                    "status": r.status.name,
+                    "message": r.message,
+                }
+                for r in results
+            ],
+        }
+
+    def render_json(self, results: list[CheckResult]) -> str:
+        return json.dumps(self.to_json_obj(results), ensure_ascii=False, indent=2)
+
+    def _summary_obj(self, results: list[CheckResult]) -> dict:
         passed = sum(1 for r in results if r.status == CheckStatus.PASS)
         failed = sum(1 for r in results if r.status == CheckStatus.FAIL)
         warned = sum(1 for r in results if r.status == CheckStatus.WARN)
+        return {"passed": passed, "warnings": warned, "failed": failed}
 
-        return f"Summary: {passed} passed, {warned} warnings, {failed} failed"
+    def _summary(self, results: list[CheckResult]) -> str:
+        s = self._summary_obj(results)
+        return f"Summary: {s['passed']} passed, {s['warnings']} warnings, {s['failed']} failed"
