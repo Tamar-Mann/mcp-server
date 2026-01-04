@@ -1,7 +1,10 @@
 from domain.models import CheckResult, CheckStatus
-from infrastructure.process_runner import MCPProcessRunner
 from infrastructure.detect_mcp import detect_mcp_command
-import json
+from infrastructure.runner_factory import RunnerFactory
+import logging
+
+log = logging.getLogger(__name__)
+
 
 class ToolsRegistrationCheck:
     name = "MCP tools are registered and discoverable"
@@ -9,64 +12,36 @@ class ToolsRegistrationCheck:
     def run(self, ctx) -> CheckResult:
         command = ctx.command or detect_mcp_command(ctx.project_path)
         if not command:
-            return CheckResult(
-                self.name,
-                CheckStatus.FAIL,
-                "Cannot determine MCP start command",
-            )
+            return CheckResult(self.name, CheckStatus.FAIL, "Cannot determine MCP start command")
+
+        factory = ctx.runner_factory or RunnerFactory()
 
         try:
-            with MCPProcessRunner(
-                command=command,
-                project_path=ctx.project_path,
-                timeout_sec=ctx.timeout_sec,
-            ) as runner:
-                # initialize
-                if not runner.initialize():
-                    return CheckResult(
-                        self.name,
-                        CheckStatus.FAIL,
-                        "Server did not respond to initialize",
-                    )
+            with factory.create(command, ctx.project_path, ctx.timeout_sec) as s:
+                init = s.client.initialize()
+                if not init or "result" not in init:
+                    tail = s.runner.stderr_tail
+                    extra = f"\n--- stderr tail ---\n{tail}" if tail else ""
+                    return CheckResult(self.name, CheckStatus.FAIL, f"Server did not respond to initialize{extra}")
 
-                # tools/list
-                response = runner.send_request(
-                    method="tools/list",
-                    request_id=2,
-                )
-
+                response = s.client.call("tools/list", request_id=2)
                 if not response or "result" not in response:
-                    return CheckResult(
-                        self.name,
-                        CheckStatus.FAIL,
-                        "tools/list returned no result",
-                    )
+                    tail = s.runner.stderr_tail
+                    extra = f"\n--- stderr tail ---\n{tail}" if tail else ""
+                    return CheckResult(self.name, CheckStatus.FAIL, f"tools/list returned no result{extra}")
 
                 tools = response["result"].get("tools", [])
                 if not tools:
-                    return CheckResult(
-                        self.name,
-                        CheckStatus.FAIL,
-                        "No tools registered",
-                    )
+                    return CheckResult(self.name, CheckStatus.FAIL, "No tools registered")
 
                 for tool in tools:
                     if "name" not in tool or "inputSchema" not in tool:
-                        return CheckResult(
-                            self.name,
-                            CheckStatus.FAIL,
-                            f"Invalid tool schema: {tool}",
-                        )
+                        return CheckResult(self.name, CheckStatus.FAIL, f"Invalid tool schema: {tool}")
 
-                return CheckResult(
-                    self.name,
-                    CheckStatus.PASS,
-                    f"{len(tools)} tools registered correctly",
-                )
+                return CheckResult(self.name, CheckStatus.PASS, f"{len(tools)} tools registered correctly")
 
-        except Exception as e:
-            return CheckResult(
-                self.name,
-                CheckStatus.FAIL,
-                f"Exception during tools check: {e}",
-            )
+        except Exception:
+            log.exception("ToolsRegistrationCheck crashed (project=%s, command=%s)", ctx.project_path, command)
+            tail = s.runner.stderr_tail if "s" in locals() else ""
+            extra = f"\n--- stderr tail ---\n{tail}" if tail else ""
+            return CheckResult(self.name, CheckStatus.FAIL, f"Exception during tools check{extra}")

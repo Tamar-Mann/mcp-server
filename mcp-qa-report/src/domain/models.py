@@ -2,9 +2,9 @@ from enum import Enum
 from dataclasses import dataclass
 
 class CheckStatus(str, Enum):
-    PASS = "👌"
+    PASS = "✅"
     WARN = "⚠️"
-    FAIL = "❎"
+    FAIL = "❌"
 
 @dataclass
 class CheckResult:

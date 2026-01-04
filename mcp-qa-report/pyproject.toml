@@ -3,13 +3,12 @@ name = "qa-report-mcp"
 version = "0.1.0"
 description = "MCP server providing QA and sanity checks for AI coding projects"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.28.1",
     "mcp[cli]>=1.25.0",
 ]
 
-#לבדוק אם תקין וצריך
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",

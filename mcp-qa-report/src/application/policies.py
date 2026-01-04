@@ -5,7 +5,6 @@ class FailFastPolicy:
     def should_stop(self, status: CheckStatus) -> bool:
         return status == CheckStatus.FAIL
 
-"""class RunAllPolicy:
+class RunAllPolicy:
     def should_stop(self, status: CheckStatus) -> bool:
         return False
-"""
