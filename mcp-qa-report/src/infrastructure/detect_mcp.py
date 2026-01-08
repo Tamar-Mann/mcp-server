@@ -1,3 +1,10 @@
+"""
+Detects how to start a target MCP server project.
+
+Prefers explicit MCP config (mcp.json / .vscode/mcp.json),
+then falls back to Python entrypoints (pyproject scripts) or Node scripts (package.json).
+Returns a command list suitable for subprocess execution, or None if unknown.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -5,7 +12,6 @@ import json
 import sys
 import tomllib
 from typing import Any
-
 
 def _pick_entrypoint(scripts: dict[str, Any]) -> str | None:
     if not scripts:

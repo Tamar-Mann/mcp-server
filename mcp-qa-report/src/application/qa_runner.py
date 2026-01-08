@@ -1,8 +1,15 @@
+"""
+Orchestrates executing QA checks.
+
+Runs checks in order, collects CheckResult items,
+and respects a StopPolicy (fail-fast or run-all).
+"""
 from typing import Iterable
 from domain.ports import QACheck, StopPolicy
 from domain.models import CheckResult
 
 class QARunner:
+    """Executes a sequence of QACheck instances under a StopPolicy.""" 
     def __init__(self, checks: Iterable[QACheck], policy: StopPolicy):
         self._checks = checks
         self._policy = policy

@@ -1,3 +1,9 @@
+"""
+Subprocess runner for stdio-based MCP servers.
+
+Starts a target MCP server as a subprocess, wires stdin/stdout for JSON-RPC,
+drains stderr in a background thread (avoids deadlocks), and exposes a stderr tail for debugging.
+"""
 import os
 import logging
 from pathlib import Path
@@ -8,8 +14,8 @@ from typing import Optional, TextIO
 
 log = logging.getLogger(__name__)
 
-
 class MCPProcessRunner:
+    """Manages lifecycle of a subprocess MCP server (stdio), including stderr draining."""
     def __init__(self, command: list[str], project_path: str):
         self._command = command
         self._project_path = project_path

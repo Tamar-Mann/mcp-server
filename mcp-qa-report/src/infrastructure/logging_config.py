@@ -1,3 +1,9 @@
+"""
+Central logging configuration.
+
+Routes logs to stderr (never stdout) to avoid breaking MCP stdio JSON-RPC.
+LOG_LEVEL can override the default verbosity.
+"""
 import os
 import logging
 import sys

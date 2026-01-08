@@ -5,14 +5,24 @@ import logging
 
 log = logging.getLogger(__name__)
 
-
 class MCPServerStartupCheck:
+    """
+    Verifies that the MCP server can be started and responds correctly
+    to the initial 'initialize' JSON-RPC request.
+
+    This ensures the server is runnable and speaks valid MCP over STDIO.
+    """
     name = "MCP server starts and responds over stdio"
 
     def run(self, ctx) -> CheckResult:
         command = ctx.command or detect_mcp_command(ctx.project_path)
         if not command:
-            return CheckResult(self.name, CheckStatus.FAIL, "Cannot determine how to start MCP server")
+            return CheckResult(
+                self.name,
+                CheckStatus.FAIL,
+                "Cannot determine how to start MCP server. "
+                "Provide an explicit 'command' parameter (e.g. ['python', '-m', 'mcp_server.server'])."
+            )
 
         factory = ctx.runner_factory or RunnerFactory()
 

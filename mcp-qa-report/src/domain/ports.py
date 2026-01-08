@@ -1,4 +1,3 @@
-# domain/ports.py
 from typing import Protocol
 from .models import CheckResult, CheckStatus
 

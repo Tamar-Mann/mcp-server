@@ -1,3 +1,10 @@
+"""
+Minimal JSON-RPC 2.0 client for MCP over stdio.
+
+Writes requests to stdin, reads stdout in a background thread to avoid blocking,
+filters responses by expected id, and raises JsonRpcTimeoutError on deadline.
+Supports collecting pre-initialize noise for STDIO integrity checks.
+"""
 import json
 import time
 import threading
@@ -6,8 +13,8 @@ from typing import TextIO
 
 from infrastructure.errors import JsonRpcTimeoutError, JsonRpcProtocolError
 
-
 class JsonRpcClient:
+    """Threaded JSON-RPC client over stdio with request-id matching and timeouts."""
     def __init__(self, stdin: TextIO, stdout: TextIO, timeout_sec: int):
         self._stdin = stdin
         self._stdout = stdout
