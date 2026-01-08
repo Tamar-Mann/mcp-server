@@ -5,8 +5,14 @@ import logging
 
 log = logging.getLogger(__name__)
 
-
 class ToolInvocationCheck:
+    """
+    Performs an end-to-end invocation test using tools/call.
+
+    If a safe tool such as 'ping' exists, it is invoked to verify
+    full request/response flow. If no safe tool is available,
+    the check degrades gracefully to WARN.
+    """    
     name = "MCP tool invocation works (tools/call)"
 
     def run(self, ctx) -> CheckResult:

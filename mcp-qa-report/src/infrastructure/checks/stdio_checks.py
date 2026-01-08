@@ -5,8 +5,13 @@ import logging
 
 log = logging.getLogger(__name__)
 
-
 class STDIOIntegrityCheck:
+    """
+    Ensures the MCP server does not emit any unexpected output
+    to STDIO before responding to the 'initialize' request.
+
+    Any noise before initialization may break JSON-RPC communication.
+    """
     name = "STDIO integrity (no noise before initialize)"
 
     def run(self, ctx) -> CheckResult:

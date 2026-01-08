@@ -5,8 +5,14 @@ import logging
 
 log = logging.getLogger(__name__)
 
-
 class ToolsRegistrationCheck:
+    """
+    Validates that the MCP server registers tools correctly
+    and that each tool exposes a minimal valid schema
+    (name and inputSchema).
+
+    This confirms tools are discoverable via tools/list.
+    """
     name = "MCP tools are registered and discoverable"
 
     def run(self, ctx) -> CheckResult:

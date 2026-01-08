@@ -1,3 +1,9 @@
+"""
+Dependency wiring (composition root).
+
+Builds the list of checks, stop policy (fail-fast vs run-all),
+and the reporter implementation used by the qa_report tool.
+"""
 from application.qa_runner import QARunner
 from application.policies import FailFastPolicy, RunAllPolicy
 
@@ -8,7 +14,6 @@ from infrastructure.checks.tool_quality_checks import ToolDescriptionQualityChec
 from infrastructure.reporters.text_reporter import TextReporter
 from infrastructure.checks.invocation_checks import ToolInvocationCheck
 from domain.ports import Reporter
-
 
 def build_checks():
     return [

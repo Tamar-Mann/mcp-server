@@ -1,3 +1,9 @@
+"""
+Factory for MCP client sessions.
+
+Creates MCPProcessRunner + JsonRpcClient as a context-managed session,
+ensuring processes and threads are cleaned up reliably on exit.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -5,7 +11,6 @@ from typing import Optional
 
 from infrastructure.process_runner import MCPProcessRunner
 from infrastructure.jsonrpc_client import JsonRpcClient
-
 
 @dataclass
 class MCPClientSession:

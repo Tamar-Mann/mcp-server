@@ -5,8 +5,13 @@ import logging
 
 log = logging.getLogger(__name__)
 
-
 class ToolDescriptionQualityCheck:
+    """
+    Evaluates the quality of tool descriptions exposed by the MCP server.
+
+    Tools with missing or very short descriptions are reported as WARN,
+    as poor metadata reduces usability for LLM-based agents.
+    """
     name = "Tool description quality"
 
     def run(self, ctx) -> CheckResult:

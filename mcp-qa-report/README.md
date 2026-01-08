@@ -1,26 +1,38 @@
 # MCP QA Report (Local MCP Server)
 
-A local **Model Context Protocol (MCP)** server that provides a single practical tool:
+A local **Model Context Protocol (MCP)** server that provides a single practical QA tool:
 
-- **`qa_report`** — run sanity checks against an MCP project (this repo *or any other local MCP project*) and return a clear ✅/⚠️/❌ checklist report.
+- **`qa_report`** — run sanity and protocol-level checks against an MCP project (this repo *or any other local MCP project*) and return a clear ✅/⚠️/❌ checklist report.
 
-This project was built as an MCP implementation exercise and as a **general-purpose validator** for quickly checking local MCP servers during development or review.
+This project was built as an MCP implementation exercise and as a **general-purpose validator**
+for quickly checking MCP servers during development, review, or automated validation.
 
-Built with reviewers in mind — because checking the same basics over and over adds up. `qa_report` packages the essentials into a quick checklist :)
+Built with reviewers and coding agents in mind — because checking the same MCP basics over and over adds up.
+
+Intended for MCP developers, reviewers, and tooling authors who want fast, deterministic protocol validation.
 
 ---
 
 ## What this MCP does
 
-`qa_report()` runs a small battery of protocol-level checks, for example:
+`qa_report()` runs a focused set of **runtime protocol checks**, for example:
 
-- Server starts and responds over **STDIO**
-- STDIO integrity (no noise before `initialize`)
+- MCP server starts and responds over **STDIO**
+- STDIO integrity (no non-JSON noise before `initialize`)
 - Tools are registered and discoverable (`tools/list`)
-- Tool metadata quality (description presence/quality)
+- Tool metadata quality (description presence / minimal quality)
 - Optional end-to-end tool invocation smoke test (`tools/call`), when a safe tool is available (e.g. `ping`)
 
-The output is intentionally **a checklist**, not a score.
+The output is intentionally **a checklist**, not a score — designed for quick human and agent review.
+
+This MCP focuses on **runtime protocol correctness**, not static project structure.
+
+Example output:
+```text
+[PASS] MCP server starts and responds over stdio
+[PASS] Tools are registered and discoverable
+[WARN] Tool description is minimal
+```
 
 ---
 
@@ -32,53 +44,56 @@ The actual Python package lives under `mcp-qa-report/`:
 mcp-qa-report/
   pyproject.toml
   src/
-    mcp_server/           # MCP server entrypoint + tools
-    application/          # orchestration (runner, policies)
-    domain/               # ports + models
-    infrastructure/       # checks, process runner, json-rpc client, reporters
+    mcp_server/           # MCP server entrypoint + tool registration
+    application/          # orchestration (runner, policies, container)
+    domain/               # ports (protocols) + models
+    infrastructure/       # checks, process runner, JSON-RPC client, reporters
   tests/                  # unit / integration / e2e
 ```
 
-Design highlights (clean layering, kept lightweight):
+### Design highlights
 
-- **SRP**: checks, runner, reporters, and process/JSON-RPC plumbing are separated.
-- **Dependency inversion**: the runner depends on `QACheck` / `Reporter` protocols; infrastructure implements them.
-- **Extensible**: add a new check by implementing `QACheck` and wiring it in `application/container.py`.
+- **Clear separation of concerns** between checks, orchestration, reporting, and stdio/JSON-RPC plumbing
+- **Dependency inversion** via protocol-based abstractions (`QACheck`, `Reporter`, `StopPolicy`)
+- **Extensible by design** — adding a new check requires implementing `QACheck` and wiring it in `application/container.py`
 
 ---
 
 ## Requirements
 
 - Python **3.11+**
-- Node.js (only for running the Inspector UI)
+- Node.js (only for running the MCP Inspector UI)
 
 ---
 
 ## Environment variables (optional)
 
-This project does **not** require a `.env` file.  
-All settings are optional and can be provided as regular environment variables in your shell / CI.
+This project does **not** require a `.env` file and does not auto-load one.
 
-If you want a simple starting point for future use, keep a tracked `./.env.example` file
-and copy it locally to `.env` (do **not** commit `.env`):
+All configuration can be provided via standard environment variables
+(shell, CI, or Inspector configuration).
+
+A tracked `./.env.example` is included **for documentation and future use only**.
 
 ```bash
 cp .env.example .env
 ```
 
-> Note: the code does not auto-load `.env`.
-> `.env.example` is tracked only as documentation and a future-friendly template (for local dev/CI).  
-> To use it, export the variables in your shell/CI (or later add a loader like `python-dotenv`).
+> Note: `.env` is **not auto-loaded** by the code.
+> `.env.example` exists only as a reference template.
+> A loader such as `python-dotenv` can be added explicitly in the future if needed.
 
 ### Supported variables
 
-- `LOG_LEVEL` — controls logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`). Default: `INFO`
-- `RUN_INTEGRATION` — when set to `1`, enables `@pytest.mark.integration` tests (default: skipped)
-- `RUN_E2E` — when set to `1`, enables `@pytest.mark.e2e` tests (default: skipped)
+- `LOG_LEVEL` — logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`). Default: `INFO`
+- `RUN_INTEGRATION` — enable `@pytest.mark.integration` tests when set to `1`
+- `RUN_E2E` — enable `@pytest.mark.e2e` tests when set to `1`
 
 ---
 
-## Install with uv (recommended)
+## Installation
+
+### Install with uv (recommended)
 
 ```bash
 cd mcp-qa-report
@@ -92,20 +107,22 @@ uv pip install -e .
 uv pip install --group dev
 ```
 
-Run the server:
+Run the MCP server:
+
+From the project root directory (`mcp-qa-report/`), run:
 
 ```bash
 uv run python -m mcp_server.server
 ```
 
-> If you prefer, after install you can also run the script entrypoint:
+> Alternatively, after installation you may use the script entrypoint:
 > `uv run qa-report-mcp`
 
 ---
 
-## Install (venv + pip)
+### Install with venv + pip
 
-### Windows PowerShell
+#### Windows PowerShell
 ```powershell
 cd mcp-qa-report
 python -m venv .venv
@@ -115,7 +132,7 @@ pip install -e .
 pip install pytest
 ```
 
-### macOS / Linux (bash/zsh)
+#### macOS / Linux
 ```bash
 cd mcp-qa-report
 python3 -m venv .venv
@@ -125,20 +142,16 @@ pip install -e .
 pip install pytest
 ```
 
-> Alternative (no install): you can run by setting `PYTHONPATH=src` so Python can import `mcp_server/`. Editable install is still the cleanest approach to avoid import issues.
-
 ---
 
 ## Run the MCP server (stdio)
-
-After installation, run:
 
 ```bash
 python -m mcp_server.server
 ```
 
-The server logs to **stderr** (so it does not break MCP stdio JSON-RPC traffic).  
-You can control log verbosity via `LOG_LEVEL` (e.g. `LOG_LEVEL=DEBUG`).
+Logs are written to **stderr** (stdout is reserved for MCP JSON-RPC).
+Logging verbosity is controlled via `LOG_LEVEL`.
 
 ---
 
@@ -149,51 +162,43 @@ You can control log verbosity via `LOG_LEVEL` (e.g. `LOG_LEVEL=DEBUG`).
 npx @modelcontextprotocol/inspector
 ```
 
-2) In the Inspector UI, create a **STDIO** server connection:
+2) Create a **STDIO** server connection:
 
 - **Command**: `python`
 - **Args**: `-m mcp_server.server`
-- **Working directory**: point it to the `mcp-qa-report` folder (recommended)
+- **Working directory**: the `mcp-qa-report` folder (recommended)
 
 3) Connect, then open **Tools** and call **`qa_report`**.
 
 ---
 
-## `qa_report` inputs
+## `qa_report` tool inputs
+
+All tool inputs are exposed via the MCP Inspector UI.
 
 ### `project_path` (string, default `"."`)
-Path to the target project you want to validate.  
-`"."` means “the server process working directory”.
+Path to the target project you want to validate.
 
 ### `command` (array of strings, optional)
-How to start the **target** MCP server you are checking.
+Explicit start command for the target MCP server.
 
-- If provided, this is **highest priority** and will be used as-is.
-- If omitted / `null`, the tool auto-detects a start command using (in order):
-  1) `.vscode/mcp.json` or `mcp.json` (`servers` or `mcpServers`) — prefers an entry with `"type": "stdio"` if present, otherwise uses the first one.
-  2) `pyproject.toml` scripts — picks a likely entrypoint and runs it via the current Python interpreter.
-  3) `package.json` scripts — uses `npm run start` (or `npm run dev` as a fallback).
+Auto-detection is attempted (best-effort) in the following order:
+1) `.vscode/mcp.json` or `mcp.json`
+2) `pyproject.toml` scripts
+3) `package.json` scripts
+
+Providing an explicit command is recommended for full reliability.
 
 ### `fail_fast` (bool, default `true`)
-- `true`: stop on first ❌ (faster).
-- `false`: run all checks and aggregate results.
+Stop on first failure if true.
 
 ### `output_path` (string, optional)
-Controls whether the report is returned **as text** or **written to disk**.
-
-- If **omitted / `null`** → the tool returns the report text (no files written).
-- If provided but **empty/whitespace** → treated like omitted (`null`) and returns text.
-- If provided and non-empty:
-  - **Directory mode** (either ends with `/` or `\`, **or** has **no suffix/extension**)  
-    Writes `qa_report.txt` inside that directory (under `project_path`).  
-    Examples: `out/`, `out\`, `out`
-  - **File mode** (has a suffix/extension, and does **not** end with a slash)  
-    Writes exactly to that file path (under `project_path`).  
-    Example: `out/report.md`
-
-**Note:** “no suffix/extension” means that `output_path="out"` is treated as a directory, not a file. If you want a file, give it an extension (e.g. `out/report.txt`).
+If provided, writes the report under `project_path`; otherwise returns the report inline.  
+Paths are validated to prevent escaping outside `project_path`.
 
 **Safety:** paths are forced to stay **under `project_path`** (escaping with `../` is blocked).
+
+For detailed parameter behavior and edge cases, see the `qa_report` tool description exposed via MCP.
 
 ---
 
@@ -201,57 +206,54 @@ Controls whether the report is returned **as text** or **written to disk**.
 
 This project uses **pytest** and groups tests into three levels:
 
-- **Unit tests** (default): fast tests that do not spawn subprocesses.
-- **Integration tests** (`@pytest.mark.integration`): start a real MCP server subprocess and validate core protocol calls (`initialize`, `tools/list`).
-- **E2E tests** (`@pytest.mark.e2e`): start a real MCP server subprocess and validate end-to-end tool invocation (`tools/call`, e.g. `ping`).
+- **Unit tests** — fast tests without subprocesses (default)
+- **Integration tests** — real MCP server subprocess, core protocol calls
+- **E2E tests** — full `tools/call` invocation flow (e.g. `ping`)
 
-### Run unit tests (default)
+Run unit tests:
 ```bash
 pytest -q
 ```
 
-### Run integration tests
-PowerShell:
-```powershell
-$env:RUN_INTEGRATION="1"
-pytest -q -m integration
-Remove-Item Env:RUN_INTEGRATION -ErrorAction SilentlyContinue
-```
-
-bash/zsh:
+Run integration tests:
 ```bash
 RUN_INTEGRATION=1 pytest -q -m integration
 ```
 
-### Run E2E tests
-PowerShell:
-```powershell
-$env:RUN_E2E="1"
-pytest -q -m e2e
-Remove-Item Env:RUN_E2E -ErrorAction SilentlyContinue
-```
-
-bash/zsh:
+Run E2E tests:
 ```bash
 RUN_E2E=1 pytest -q -m e2e
 ```
 
-### Notes
-- By default, integration and e2e tests are skipped unless the corresponding environment variable is set.
-- To see which tests were skipped and why:
-```bash
-pytest -q -rs
-```
+By default, integration and e2e tests are skipped unless explicitly enabled via environment variables.
 
 ---
 
-## Extending the checks
+## Concurrency & scalability note
 
-Add a new check by implementing `QACheck` (see `domain/ports.py`) and wiring it into `application/container.py`.
+This MCP server is intentionally implemented in a **synchronous** style.
 
-Ideas:
-- Verify README presence and required sections (run/install/Inspector/examples)
-- Verify tool `inputSchema` structure more strictly
-- Add optional lint/format checks (kept separate from protocol checks)
-- Export JSON report alongside text output
+The primary use-case is local, on-demand validation where simplicity,
+debuggability, and deterministic behavior are preferred over throughput.
 
+If higher throughput is required in the future, the design allows:
+- migrating process handling and JSON-RPC I/O to asyncio
+- running checks concurrently
+- isolating checks into worker processes
+
+---
+
+## Possible future extensions
+
+The current scope is intentionally limited to runtime MCP protocol validation.
+
+Possible future extensions include:
+- README / documentation presence and structure checks
+- Deeper validation of tool input schemas
+- Optional performance or startup-time checks
+
+---
+
+## Verification
+
+Detailed Codex and MCP Inspector validation scenarios are documented in **VERIFICATION.md**.

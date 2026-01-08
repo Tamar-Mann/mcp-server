@@ -1,3 +1,9 @@
+"""
+Writes QA report artifacts to disk.
+
+Supports writing either to a specific file path or to a directory.
+Ensures output paths are resolved safely under the project root.
+"""
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path

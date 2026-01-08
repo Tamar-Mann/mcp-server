@@ -1,7 +1,16 @@
+"""
+Renders QA results as a human-readable checklist.
+
+Each check is rendered on a single line with a status icon (PASS/WARN/FAIL),
+followed by a short summary footer.
+"""
 import json
 from domain.models import CheckResult, CheckStatus
 
 class TextReporter:
+    """
+    Renders a list of CheckResult objects as a plain-text checklist report.
+    """
     def render(self, results: list[CheckResult]) -> str:
         lines = []
 
