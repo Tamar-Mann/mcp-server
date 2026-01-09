@@ -1,13 +1,14 @@
 """
 Factory for MCP client sessions.
 
-Creates MCPProcessRunner + JsonRpcClient as a context-managed session,
-ensuring processes and threads are cleaned up reliably on exit.
+Creates MCPProcessRunner + JsonRpcClient as an async context-managed session,
+ensuring processes and resources are cleaned up reliably on exit.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, AsyncGenerator
+from contextlib import asynccontextmanager
 
 from infrastructure.process_runner import MCPProcessRunner
 from infrastructure.jsonrpc_client import JsonRpcClient
@@ -18,9 +19,8 @@ class MCPClientSession:
     timeout_sec: int
     _client: Optional[JsonRpcClient] = None
 
-    def __enter__(self) -> "MCPClientSession":
-
-        self.runner.start()
+    async def __aenter__(self) -> "MCPClientSession":
+        await self.runner.start()
         self._client = JsonRpcClient(
             stdin=self.runner.stdin,
             stdout=self.runner.stdout,
@@ -33,17 +33,20 @@ class MCPClientSession:
         assert self._client is not None, "Session not entered yet"
         return self._client
 
-    def __exit__(self, exc_type, exc, tb) -> None:
-        
+    # Ensures the subprocess and RPC client are properly terminated even if an error occurs
+    async def __aexit__(self, exc_type, exc, tb) -> None:
         try:
-            self.runner.terminate()
+            await self.runner.terminate()
         finally:
             if self._client is not None:
-                self._client.close()
+                await self._client.close()
                 self._client = None
 
 
 class RunnerFactory:
-    def create(self, command: list[str], project_path: str, timeout_sec: int) -> MCPClientSession:
+    @asynccontextmanager
+    async def create(self, command: list[str], project_path: str, timeout_sec: int) -> AsyncGenerator[MCPClientSession, None]:
         runner = MCPProcessRunner(command=command, project_path=project_path)
-        return MCPClientSession(runner=runner, timeout_sec=timeout_sec)
+        session = MCPClientSession(runner=runner, timeout_sec=timeout_sec)
+        async with session:
+            yield session

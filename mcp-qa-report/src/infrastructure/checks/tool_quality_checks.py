@@ -14,7 +14,7 @@ class ToolDescriptionQualityCheck:
     """
     name = "Tool description quality"
 
-    def run(self, ctx) -> CheckResult:
+    async def run(self, ctx) -> CheckResult:
         command = ctx.command or detect_mcp_command(ctx.project_path)
         if not command:
             return CheckResult(self.name, CheckStatus.FAIL, "Cannot determine MCP start command")
@@ -22,14 +22,14 @@ class ToolDescriptionQualityCheck:
         factory = ctx.runner_factory or RunnerFactory()
 
         try:
-            with factory.create(command, ctx.project_path, ctx.timeout_sec) as s:
-                init = s.client.initialize()
+            async with factory.create(command, ctx.project_path, ctx.timeout_sec) as s:
+                init = await s.client.initialize()
                 if not init or "result" not in init:
                     tail = s.runner.stderr_tail
                     extra = f"\n--- stderr tail ---\n{tail}" if tail else ""
                     return CheckResult(self.name, CheckStatus.FAIL, f"Server did not respond to initialize{extra}")
 
-                response = s.client.call("tools/list", request_id=10)
+                response = await s.client.call("tools/list", request_id=10)
                 if not response or "result" not in response:
                     tail = s.runner.stderr_tail
                     extra = f"\n--- stderr tail ---\n{tail}" if tail else ""
@@ -56,6 +56,12 @@ class ToolDescriptionQualityCheck:
 
         except Exception:
             log.exception("ToolDescriptionQualityCheck crashed (project=%s, command=%s)", ctx.project_path, command)
-            tail = s.runner.stderr_tail if "s" in locals() else ""
+            tail = ""
+            if 's' in locals() and s is not None:
+                try:
+                    tail = s.runner.stderr_tail
+                except Exception:
+                    pass
+            
             extra = f"\n--- stderr tail ---\n{tail}" if tail else ""
             return CheckResult(self.name, CheckStatus.FAIL, f"Exception during tool description check{extra}")

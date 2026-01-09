@@ -14,7 +14,7 @@ class STDIOIntegrityCheck:
     """
     name = "STDIO integrity (no noise before initialize)"
 
-    def run(self, ctx) -> CheckResult:
+    async def run(self, ctx) -> CheckResult:
         command = ctx.command or detect_mcp_command(ctx.project_path)
         if not command:
             return CheckResult(self.name, CheckStatus.FAIL, "Cannot determine MCP start command")
@@ -22,8 +22,8 @@ class STDIOIntegrityCheck:
         factory = ctx.runner_factory or RunnerFactory()
 
         try:
-            with factory.create(command, ctx.project_path, ctx.timeout_sec) as s:
-                init_response, noise = s.client.initialize_collect_noise()
+            async with factory.create(command, ctx.project_path, ctx.timeout_sec) as s:
+                init_response, noise = await s.client.initialize_collect_noise()
 
                 if not init_response or "result" not in init_response:
                     tail = s.runner.stderr_tail
@@ -41,6 +41,12 @@ class STDIOIntegrityCheck:
 
         except Exception:
             log.exception("STDIOIntegrityCheck crashed (project=%s, command=%s)", ctx.project_path, command)
-            tail = s.runner.stderr_tail if "s" in locals() else ""
+            tail = ""
+            if 's' in locals() and s is not None:
+                try:
+                    tail = s.runner.stderr_tail
+                except Exception:
+                    pass
+            
             extra = f"\n--- stderr tail ---\n{tail}" if tail else ""
             return CheckResult(self.name, CheckStatus.FAIL, f"Exception during STDIO check{extra}")

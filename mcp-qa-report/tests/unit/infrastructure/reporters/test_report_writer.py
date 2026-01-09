@@ -3,9 +3,12 @@ from pathlib import Path
 
 from infrastructure.reporters.report_writer import write_report_files
 
+import asyncio
 
-def test_write_report_files_creates_files_under_project(tmp_path: Path):
-    r = write_report_files(
+
+@pytest.mark.asyncio
+async def test_write_report_files_creates_files_under_project(tmp_path: Path):
+    r = await write_report_files(
         project_path=str(tmp_path),
         output_dir=".qa-report",
         base_name="qa_report",
@@ -20,9 +23,10 @@ def test_write_report_files_creates_files_under_project(tmp_path: Path):
     assert Path(r.json_path).read_text(encoding="utf-8") == '{"x":1}'
 
 
-def test_write_report_files_blocks_escape(tmp_path: Path):
+@pytest.mark.asyncio
+async def test_write_report_files_blocks_escape(tmp_path: Path):
     with pytest.raises(ValueError):
-        write_report_files(
+        await write_report_files(
             project_path=str(tmp_path),
             output_dir="../evil",
             base_name="x",

@@ -1,57 +1,45 @@
 """
 Minimal JSON-RPC 2.0 client for MCP over stdio.
 
-Writes requests to stdin, reads stdout in a background thread to avoid blocking,
-filters responses by expected id, and raises JsonRpcTimeoutError on deadline.
+Writes requests to stdin, reads stdout asynchronously to avoid blocking,
+filters responses by expected id, and raises JsonRpcTimeoutError on timeout.
 Supports collecting pre-initialize noise for STDIO integrity checks.
 """
 import json
-import time
-import threading
-import queue
-from typing import TextIO
+import asyncio
+from typing import Optional
 
 from infrastructure.errors import JsonRpcTimeoutError, JsonRpcProtocolError
 
 class JsonRpcClient:
-    """Threaded JSON-RPC client over stdio with request-id matching and timeouts."""
-    def __init__(self, stdin: TextIO, stdout: TextIO, timeout_sec: int):
+    """Async JSON-RPC client over stdio with request-id matching and timeouts."""
+    def __init__(self, stdin: asyncio.StreamWriter, stdout: asyncio.StreamReader, timeout_sec: int):
         self._stdin = stdin
         self._stdout = stdout
         self._timeout = timeout_sec
+        self._closed = False
 
-        self._q: "queue.Queue[str]" = queue.Queue()
-        self._stop = threading.Event()
-        self._t = threading.Thread(target=self._reader, daemon=True)
-        self._t.start()
-
-    def _reader(self) -> None:
-        # Reads stdout lines forever and pushes to queue (no blocking in main thread)
-        while not self._stop.is_set():
-            line = self._stdout.readline()
-            if not line:
-                # EOF or process ended
-                break
-            self._q.put(line)
-
-    def close(self) -> None:
-        self._stop.set()
+    async def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
         try:
-            self._t.join(timeout=0.2)
+            if self._stdin is not None:
+                self._stdin.close()
+                await self._stdin.wait_closed()
         except Exception:
             pass
 
-
-    def initialize(self) -> dict | None:
-        data, _ = self._request_with_optional_noise(self._init_msg(), expected_id=1, collect_noise=False)
+    async def initialize(self) -> dict | None:
+        data, _ = await self._request_with_optional_noise(self._init_msg(), expected_id=1, collect_noise=False)
         return data
 
-    def initialize_collect_noise(self) -> tuple[dict | None, list[str]]:
-        return self._request_with_optional_noise(self._init_msg(), expected_id=1, collect_noise=True)
+    async def initialize_collect_noise(self) -> tuple[dict | None, list[str]]:
+        return await self._request_with_optional_noise(self._init_msg(), expected_id=1, collect_noise=True)
 
-    def call(self, method: str, request_id: int, params: dict | None = None) -> dict | None:
+    async def call(self, method: str, request_id: int, params: dict | None = None) -> dict | None:
         msg = {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params or {}}
-        data, _ = self._request_with_optional_noise(msg, expected_id=request_id, collect_noise=False)
+        data, _ = await self._request_with_optional_noise(msg, expected_id=request_id, collect_noise=False)
         return data
 
     def _init_msg(self) -> dict:
@@ -66,47 +54,53 @@ class JsonRpcClient:
             },
         }
 
-    def _write_json(self, msg: dict) -> None:
+    async def _write_json(self, msg: dict) -> None:
         try:
-            self._stdin.write(json.dumps(msg) + "\n")
-            self._stdin.flush()
+            self._stdin.write(json.dumps(msg).encode("utf-8") + b"\n")
+            await self._stdin.drain()
         except Exception as e:
             raise JsonRpcProtocolError(f"Failed writing JSON-RPC request: {e}") from e
 
-    def _request_with_optional_noise(
+    async def _request_with_optional_noise(
         self,
         msg: dict,
         expected_id: int,
         collect_noise: bool,
     ) -> tuple[dict | None, list[str]]:
-        self._write_json(msg)
+        await self._write_json(msg)
 
         noise: list[str] = []
-        deadline = time.time() + self._timeout
 
-        while time.time() < deadline:
-            remaining = max(0.0, deadline - time.time())
-            try:
-                line = self._q.get(timeout=min(0.2, remaining))
-            except queue.Empty:
-                continue
+        try:
+            async with asyncio.timeout(self._timeout):
+                while True:
+                    # 1. Await the bytes FIRST. 
+                    # This ensures the coroutine is finished before we touch the data.
+                    line_bytes = await self._stdout.readline()
+                    
+                    if not line_bytes:
+                        raise JsonRpcTimeoutError(f"EOF reached before response id={expected_id}")
 
-            s = line.strip()
-            if not s:
-                continue
+                    # 2. Decode bytes to string separately
+                    line_str = line_bytes.decode("utf-8", errors="replace")
+                    
+                    # 3. Strip whitespace from the string
+                    s = line_str.strip()
+                    
+                    if not s:
+                        continue
 
-            try:
-                data = json.loads(s)
-            except json.JSONDecodeError:
-                if collect_noise:
-                    noise.append(s)
-                continue
+                    try:
+                        data = json.loads(s)
+                    except json.JSONDecodeError:
+                        if collect_noise:
+                            noise.append(s)
+                        continue
+                        
+                    # Accept only the response that matches our request ID
+                    if data.get("jsonrpc") == "2.0" and data.get("id") == expected_id:
+                        if "result" in data or "error" in data:
+                            return data, noise
 
-            # Accept only proper response with matching id
-            if data.get("jsonrpc") == "2.0" and data.get("id") == expected_id:
-                if "result" in data or "error" in data:
-                    return data, noise
-
-            # Notifications/other responses: ignore (or store as noise if you want)
-
-        raise JsonRpcTimeoutError(f"Timeout waiting for JSON-RPC response id={expected_id}")
+        except asyncio.TimeoutError:
+            raise JsonRpcTimeoutError(f"Timeout waiting for JSON-RPC response id={expected_id}")

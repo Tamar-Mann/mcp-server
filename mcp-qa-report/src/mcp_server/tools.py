@@ -4,6 +4,7 @@ MCP tool registrations.
 Exposes `qa_report` (runs QA checks and returns a checklist report),
 and a minimal `ping` tool for health-check / safe e2e invocation tests.
 """
+import asyncio
 from infrastructure.reporters.report_writer import write_report_files, write_text_file
 from mcp.server.fastmcp import FastMCP
 from application.execution_context import ExecutionContext
@@ -16,6 +17,8 @@ def register(mcp: FastMCP) -> None:
         name="qa_report",
         description=(
         "Run protocol-level QA checks on a local MCP project.\n\n"
+        "Note: Auto-detection for Python projects automatically uses 'uv run' "
+        "to ensure environment isolation and correct dependency loading.\n\n"
 
         "Typical usage:\n"
         "- Self-check: run against the current project (project_path='.')\n"
@@ -40,7 +43,7 @@ def register(mcp: FastMCP) -> None:
         "- Invalid output paths do not abort execution; the report is still returned inline."
         )
     )
-    def qa_report(
+    async def qa_report(
         project_path: str = ".",
         command: list[str] | None = None,
         fail_fast: bool = True,
@@ -49,7 +52,7 @@ def register(mcp: FastMCP) -> None:
         ctx = ExecutionContext(project_path=project_path, command=command)
 
         runner = build_runner(fail_fast=fail_fast)
-        results = runner.run(ctx)
+        results = await runner.run(ctx)
 
         reporter: Reporter = build_reporter()
         text = reporter.render(results)
@@ -61,7 +64,7 @@ def register(mcp: FastMCP) -> None:
                     op = Path(output_path)
 
                     if op.is_dir() or str(output_path).endswith(("/", "\\")) or op.suffix == "":
-                        r = write_report_files(
+                        r = await write_report_files(
                             project_path=project_path,
                             output_dir=str(op),
                             base_name="qa_report",
@@ -73,7 +76,7 @@ def register(mcp: FastMCP) -> None:
                         )
                         return f"Wrote report to: {r.text_path}"
 
-                    p = write_text_file(
+                    p = await write_text_file(
                         project_path=project_path,
                         output_file=str(op),
                         text_content=text,
@@ -84,7 +87,6 @@ def register(mcp: FastMCP) -> None:
                     return f"Failed writing report to file: {e}\n\nReport:\n{text}"
         return text
 
-
     @mcp.tool(name="ping", description="Health check tool. Returns ok.")
-    def ping() -> str:
+    async def ping() -> str:
         return "ok"
