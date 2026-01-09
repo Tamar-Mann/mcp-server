@@ -3,9 +3,12 @@ from pathlib import Path
 
 from infrastructure.reporters.report_writer import write_text_file
 
+import asyncio
 
-def test_write_text_file_writes_exact_path_under_project(tmp_path: Path):
-    p = write_text_file(
+
+@pytest.mark.asyncio
+async def test_write_text_file_writes_exact_path_under_project(tmp_path: Path):
+    p = await write_text_file(
         project_path=str(tmp_path),
         output_file="out/custom.md",
         text_content="hello",
@@ -14,9 +17,10 @@ def test_write_text_file_writes_exact_path_under_project(tmp_path: Path):
     assert Path(p) == tmp_path / "out" / "custom.md"
 
 
-def test_write_text_file_blocks_escape(tmp_path: Path):
+@pytest.mark.asyncio
+async def test_write_text_file_blocks_escape(tmp_path: Path):
     with pytest.raises(ValueError):
-        write_text_file(
+        await write_text_file(
             project_path=str(tmp_path),
             output_file="../evil.txt",
             text_content="x",

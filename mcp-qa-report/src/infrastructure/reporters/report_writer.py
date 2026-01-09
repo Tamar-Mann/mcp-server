@@ -1,10 +1,12 @@
 """
-Writes QA report artifacts to disk.
+Writes QA report artifacts to disk asynchronously.
 
 Supports writing either to a specific file path or to a directory.
 Ensures output paths are resolved safely under the project root.
+Uses asyncio.to_thread for non-blocking file I/O.
 """
 from __future__ import annotations
+import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 from datetime import datetime, timezone
@@ -24,7 +26,13 @@ def _safe_resolve_under_project(project_path: str, output_path: str) -> Path:
         raise ValueError("output_path must be inside project_path")
     return candidate
 
-def write_report_files(
+def _write_text_sync(path: Path, content: str) -> None:
+    path.write_text(content, encoding="utf-8")
+
+def _mkdir_sync(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+
+async def write_report_files(
     *,
     project_path: str,
     output_dir: str = ".qa-report",
@@ -36,7 +44,7 @@ def write_report_files(
     json_content: str,
 ) -> WriteResult:
     dir_path = _safe_resolve_under_project(project_path, output_dir)
-    dir_path.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(_mkdir_sync, dir_path)
 
     suffix = f"_{_timestamp()}" if include_timestamp else ""
     base = dir_path / f"{base_name}{suffix}"
@@ -46,23 +54,23 @@ def write_report_files(
 
     if write_text:
         p = base.with_suffix(".txt")
-        p.write_text(text_content, encoding="utf-8")
+        await asyncio.to_thread(_write_text_sync, p, text_content)
         text_path = str(p)
 
     if write_json:
         p = base.with_suffix(".json")
-        p.write_text(json_content, encoding="utf-8")
+        await asyncio.to_thread(_write_text_sync, p, json_content)
         json_path = str(p)
 
     return WriteResult(text_path=text_path, json_path=json_path)
 
-def write_text_file(*, project_path: str, output_file: str, text_content: str) -> str:
+async def write_text_file(*, project_path: str, output_file: str, text_content: str) -> str:
     """
-    Writes text_content to an explicit file path under project_path.
+    Writes text_content to an explicit file path under project_path asynchronously.
     Blocks escaping outside project_path.
     Returns the written file path as string.
     """
     p = _safe_resolve_under_project(project_path, output_file)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(text_content, encoding="utf-8")
+    await asyncio.to_thread(_mkdir_sync, p.parent)
+    await asyncio.to_thread(_write_text_sync, p, text_content)
     return str(p)

@@ -62,6 +62,7 @@ mcp-qa-report/
 ## Requirements
 
 - Python **3.11+**
+- uv
 - Node.js (only for running the MCP Inspector UI)
 
 ---
@@ -93,82 +94,38 @@ cp .env.example .env
 
 ## Installation
 
-### Install with uv (recommended)
+All commands below assume you are inside the project directory (`mcp-qa-report/`).
+
+This project requires **[uv](https://docs.astral.sh/uv/)**.
 
 ```bash
 cd mcp-qa-report
-uv venv
-# Windows PowerShell:
-#   .\.venv\Scripts\Activate.ps1
-# macOS/Linux:
-#   source .venv/bin/activate
-
+uv sync
 uv pip install -e .
-uv pip install --group dev
 ```
 
-Run the MCP server:
+## Run the MCP Server (STDIO)
 
-From the project root directory (`mcp-qa-report/`), run:
+Always use `uv run` to ensure dependencies are loaded.
+
+**Bash:**
 
 ```bash
 uv run python -m mcp_server.server
 ```
 
-> Alternatively, after installation you may use the script entrypoint:
-> `uv run qa-report-mcp`
-
----
-
-### Install with venv + pip
-
-#### Windows PowerShell
-```powershell
-cd mcp-qa-report
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -U pip
-pip install -e .
-pip install pytest
-```
-
-#### macOS / Linux
-```bash
-cd mcp-qa-report
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -U pip
-pip install -e .
-pip install pytest
-```
-
----
-
-## Run the MCP server (stdio)
-
-```bash
-python -m mcp_server.server
-```
-
-Logs are written to **stderr** (stdout is reserved for MCP JSON-RPC).
-Logging verbosity is controlled via `LOG_LEVEL`.
-
 ---
 
 ## Use with MCP Inspector
 
-1) Start the Inspector:
-```bash
-npx @modelcontextprotocol/inspector
-```
+1) Start the Inspector: `npx @modelcontextprotocol/inspector`
 
 2) Create a **STDIO** server connection:
+   - **Command**: `uv`
+   - **Args**: `run`, `python`, `-m`, `mcp_server.server`
+   - **Working directory**: [Absolute path to your mcp-qa-report folder]
 
-- **Command**: `python`
-- **Args**: `-m mcp_server.server`
-- **Working directory**: the `mcp-qa-report` folder (recommended)
-
-3) Connect, then open **Tools** and call **`qa_report`**.
+3) Connect and open **Tools** to run `qa_report`.
 
 ---
 
@@ -181,6 +138,9 @@ Path to the target project you want to validate.
 
 ### `command` (array of strings, optional)
 Explicit start command for the target MCP server.
+
+**Internal Logic:**
+If omitted, auto-detection is attempted. For Python projects, the tool **automatically wraps commands with `uv run`**. This ensures the target server runs in its own environment without conflicting with the QA tool.
 
 Auto-detection is attempted (best-effort) in the following order:
 1) `.vscode/mcp.json` or `mcp.json`
@@ -204,53 +164,63 @@ For detailed parameter behavior and edge cases, see the `qa_report` tool descrip
 
 ## Tests
 
-This project uses **pytest** and groups tests into three levels:
+Run the test suite using **uv** (standard across Windows, macOS, and Linux).
 
-- **Unit tests** — fast tests without subprocesses (default)
-- **Integration tests** — real MCP server subprocess, core protocol calls
-- **E2E tests** — full `tools/call` invocation flow (e.g. `ping`)
+### Unit Tests (Fast)
 
-Run unit tests:
 ```bash
-pytest -q
+uv run pytest tests/unit
 ```
 
-Run integration tests:
-```bash
-RUN_INTEGRATION=1 pytest -q -m integration
+### Integration & E2E Tests
+
+To run the full test suite, you must explicitly enable the environment variables.
+
+**Windows (PowerShell):**
+
+```powershell
+$env:RUN_INTEGRATION=1
+$env:RUN_E2E=1
+uv run pytest .
 ```
 
-Run E2E tests:
+**macOS / Linux (Bash):**
+
 ```bash
-RUN_E2E=1 pytest -q -m e2e
+RUN_INTEGRATION=1 RUN_E2E=1 uv run pytest .
 ```
 
-By default, integration and e2e tests are skipped unless explicitly enabled via environment variables.
+> **Note:**  
+> By default, integration and end-to-end tests are skipped to ensure fast feedback during development.
 
 ---
 
-## Concurrency & scalability note
+## Concurrency & Performance
 
-This MCP server is intentionally implemented in a **synchronous** style.
+This MCP server is fully **Asynchronous**, built on top of `asyncio`.
 
-The primary use-case is local, on-demand validation where simplicity,
-debuggability, and deterministic behavior are preferred over throughput.
-
-If higher throughput is required in the future, the design allows:
-- migrating process handling and JSON-RPC I/O to asyncio
-- running checks concurrently
-- isolating checks into worker processes
+- **Non-blocking I/O:** The server manages target MCP processes using asynchronous subprocess calls, ensuring the main loop remains responsive.
+- **Concurrent Checks:** Checks are executed asynchronously, with a fail-fast policy applied by default for deterministic feedback.  
+  The architecture fully supports concurrent execution via alternative policies.
+- **Async Resource Management:** Proper cleanup of subprocesses and streams is handled via async context managers.
 
 ---
 
-## Possible future extensions
+The roadmap below outlines possible future directions and is not required for the current validation scope.
 
-The current scope is intentionally limited to runtime MCP protocol validation.
+## Future Roadmap
 
-Possible future extensions include:
-- README / documentation presence and structure checks
-- Deeper validation of tool input schemas
-- Optional performance or startup-time checks
+The roadmap aims to evolve this tool from a local validator into a comprehensive **MCP Quality Gate**, aligning with the requirements for robust AI coding agent tooling:
+
+### 1. Deep Validation & Intelligence (Core)
+- **AI-Powered Semantic Auditing:** Integrating LLMs to verify that tool descriptions are not just present, but semantically optimized for Agentic reasoning (ensuring agents like Claude Code or Cursor know exactly when to trigger a tool).
+- **Security Sandboxing:** Runtime monitoring to detect unauthorized file system access or suspicious network activity by target MCP servers.
+- **Performance Benchmarking:** Measuring startup latency and resource consumption to ensure MCPs don't slow down the agent's context loop.
+
+### 2. Ecosystem & Enterprise Operations (Integrations)
+- **Nebius AI Infrastructure Integration:** Automated deployment and validation of MCP servers on Nebius AI cloud environments, leveraging GPU-accelerated infrastructure for high-performance AI tools.
+- **Automated Scheduling:** Integration with **Google Calendar** or Cron services to trigger periodic health checks for production-grade MCP servers, ensuring 24/7 reliability for critical tools.
+- **CI/CD GitHub Action:** A dedicated action to enforce protocol compliance automatically during the build process, preventing broken MCPs from reaching the team's coding agents.
 
 ---
 

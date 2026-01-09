@@ -1,3 +1,4 @@
+from pydoc import text
 from domain.models import CheckResult, CheckStatus
 from infrastructure.reporters.text_reporter import TextReporter
 
@@ -21,3 +22,11 @@ def test_text_reporter_json_shape():
     assert obj["summary"]["passed"] == 1
     assert obj["results"][0]["status"] == "PASS"
     assert obj["results"][0]["name"] == "a"
+
+
+def test_text_reporter_renders_emojis():
+    results = [CheckResult("a", CheckStatus.PASS, "ok")]
+    rep = TextReporter()
+    text = rep.render(results)
+    assert "✅" in text
+

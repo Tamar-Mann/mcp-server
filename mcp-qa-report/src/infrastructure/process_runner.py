@@ -2,31 +2,31 @@
 Subprocess runner for stdio-based MCP servers.
 
 Starts a target MCP server as a subprocess, wires stdin/stdout for JSON-RPC,
-drains stderr in a background thread (avoids deadlocks), and exposes a stderr tail for debugging.
+drains stderr in an async task (avoids blocking), and exposes a stderr tail for debugging.
 """
 import os
 import logging
 from pathlib import Path
-import subprocess
-import threading
+import asyncio
 from collections import deque
-from typing import Optional, TextIO
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
 class MCPProcessRunner:
-    """Manages lifecycle of a subprocess MCP server (stdio), including stderr draining."""
+    """Manages lifecycle of a subprocess MCP server (stdio), including async stderr draining."""
     def __init__(self, command: list[str], project_path: str):
         self._command = command
         self._project_path = project_path
-        self._proc: Optional[subprocess.Popen[str]] = None
+        self._proc: Optional[asyncio.subprocess.Process] = None
 
         self._stderr_lines = deque(maxlen=200)
-        self._stderr_thread: Optional[threading.Thread] = None
+        self._stderr_task: Optional[asyncio.Task] = None
 
-    def start(self) -> None:
-        if self._proc is not None and self._proc.poll() is None:
-            return
+    async def start(self) -> None:
+        if self._proc is not None:
+            if self._proc.returncode is None:
+                return
 
         cwd = Path(self._project_path)
 
@@ -37,18 +37,15 @@ class MCPProcessRunner:
             env["PYTHONPATH"] = str(src_dir) + (os.pathsep + existing if existing else "")
 
         try:
-            self._proc = subprocess.Popen(
-                self._command,
+            self._proc = await asyncio.create_subprocess_exec(
+                *self._command,
                 cwd=self._project_path,
                 env=env,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,  # line-buffered-ish for text streams
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
         except Exception:
-            # Minimal log, but with stacktrace for debugging
             log.exception(
                 "MCPProcessRunner failed to start (cwd=%s, command=%s)",
                 self._project_path,
@@ -56,7 +53,6 @@ class MCPProcessRunner:
             )
             raise
 
-        # Minimal debug (no env dump)
         log.debug(
             "MCPProcessRunner started pid=%s cwd=%s command=%s",
             self._proc.pid,
@@ -64,21 +60,18 @@ class MCPProcessRunner:
             self._command,
         )
 
-        stderr = self._proc.stderr
-        if stderr is not None:
-            self._stderr_thread = threading.Thread(
-                target=self._drain_stderr,
-                args=(stderr,),
-                daemon=True,
-            )
-            self._stderr_thread.start()
+        if self._proc.stderr is not None:
+            # Non-blocking drain of stderr to capture server logs without stalling the event loop
+            self._stderr_task = asyncio.create_task(self._drain_stderr(self._proc.stderr))
 
-    def _drain_stderr(self, stderr: TextIO) -> None:
+    async def _drain_stderr(self, stderr: asyncio.StreamReader) -> None:
         try:
-            for line in stderr:
-                self._stderr_lines.append(line.rstrip("\n"))
+            while True:
+                line = await stderr.readline()
+                if not line:
+                    break
+                self._stderr_lines.append(line.decode("utf-8", errors="replace").rstrip("\n"))
         except Exception:
-            # Do not spam logs; stderr draining is best-effort
             pass
 
     @property
@@ -86,16 +79,16 @@ class MCPProcessRunner:
         return "\n".join(list(self._stderr_lines)[-20:])
 
     @property
-    def stdin(self) -> TextIO:
+    def stdin(self) -> asyncio.StreamWriter:
         assert self._proc is not None and self._proc.stdin is not None
         return self._proc.stdin
 
     @property
-    def stdout(self) -> TextIO:
+    def stdout(self) -> asyncio.StreamReader:
         assert self._proc is not None and self._proc.stdout is not None
         return self._proc.stdout
 
-    def terminate(self) -> None:
+    async def terminate(self) -> None:
         proc = self._proc
         if proc is None:
             return
@@ -103,43 +96,41 @@ class MCPProcessRunner:
         log.debug("MCPProcessRunner terminating pid=%s", proc.pid)
 
         try:
-            # Closing stdin often helps the child process exit gracefully
-            try:
-                if proc.stdin:
+            if proc.stdin is not None:
+                try:
                     proc.stdin.close()
-            except Exception:
-                pass
+                    await proc.stdin.wait_closed()
+                except Exception:
+                    pass
 
-            if proc.poll() is None:
+            if proc.returncode is None:
                 proc.terminate()
                 try:
-                    proc.wait(timeout=1)
-                except subprocess.TimeoutExpired:
+                    await asyncio.wait_for(proc.wait(), timeout=1.0)
+                except asyncio.TimeoutError:
                     log.debug("MCPProcessRunner kill pid=%s (terminate timeout)", proc.pid)
                     proc.kill()
                     try:
-                        proc.wait(timeout=1)
+                        await asyncio.wait_for(proc.wait(), timeout=1.0)
                     except Exception:
                         pass
 
         finally:
-            # Close pipes so reader threads (stdout/stderr) can unblock on EOF
-            for stream in (proc.stdout, proc.stderr):
+            if self._stderr_task is not None:
                 try:
-                    if stream:
-                        stream.close()
+                    self._stderr_task.cancel()
+                    await self._stderr_task
+                except asyncio.CancelledError:
+                    pass
                 except Exception:
                     pass
-
-            if self._stderr_thread:
-                self._stderr_thread.join(timeout=0.5)
-                self._stderr_thread = None
+                self._stderr_task = None
 
             self._proc = None
 
-    def __enter__(self) -> "MCPProcessRunner":
-        self.start()
+    async def __aenter__(self) -> "MCPProcessRunner":
+        await self.start()
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:
-        self.terminate()
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        await self.terminate()

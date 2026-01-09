@@ -14,7 +14,7 @@ class MCPServerStartupCheck:
     """
     name = "MCP server starts and responds over stdio"
 
-    def run(self, ctx) -> CheckResult:
+    async def run(self, ctx) -> CheckResult:
         command = ctx.command or detect_mcp_command(ctx.project_path)
         if not command:
             return CheckResult(
@@ -27,8 +27,8 @@ class MCPServerStartupCheck:
         factory = ctx.runner_factory or RunnerFactory()
 
         try:
-            with factory.create(command, ctx.project_path, ctx.timeout_sec) as s:
-                data = s.client.initialize()
+            async with factory.create(command, ctx.project_path, ctx.timeout_sec) as s:
+                data = await s.client.initialize()
                 if not data or "result" not in data:
                     tail = s.runner.stderr_tail
                     extra = f"\n--- stderr tail ---\n{tail}" if tail else ""
@@ -38,6 +38,12 @@ class MCPServerStartupCheck:
 
         except Exception:
             log.exception("MCPServerStartupCheck crashed (project=%s, command=%s)", ctx.project_path, command)
-            tail = s.runner.stderr_tail if "s" in locals() else ""
+            
+            tail = ""
+            if 's' in locals() and s is not None:
+                try:
+                    tail = s.runner.stderr_tail
+                except Exception:
+                    pass 
             extra = f"\n--- stderr tail ---\n{tail}" if tail else ""
             return CheckResult(self.name, CheckStatus.FAIL, f"Exception during startup{extra}")

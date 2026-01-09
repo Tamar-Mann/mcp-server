@@ -1,6 +1,8 @@
 from pathlib import Path
 
 from domain.models import CheckResult, CheckStatus
+import pytest
+import asyncio
 
 
 class FakeMCP:
@@ -15,7 +17,7 @@ class FakeMCP:
 
 
 class DummyRunner:
-    def run(self, ctx):
+    async def run(self, ctx):
         return [CheckResult("x", CheckStatus.PASS, "ok")]
 
 
@@ -24,7 +26,8 @@ class DummyReporter:
         return "REPORT"
 
 
-def test_qa_report_writes_to_directory(tmp_path: Path, monkeypatch):
+@pytest.mark.asyncio
+async def test_qa_report_writes_to_directory(tmp_path: Path, monkeypatch):
     from mcp_server import tools as tools_mod
 
     fake = FakeMCP()
@@ -33,7 +36,8 @@ def test_qa_report_writes_to_directory(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(tools_mod, "build_runner", lambda fail_fast: DummyRunner())
     monkeypatch.setattr(tools_mod, "build_reporter", lambda: DummyReporter())
 
-    res = fake.tools["qa_report"](project_path=str(tmp_path), output_path="out/")
+    # Await the async qa_report tool handler
+    res = await fake.tools["qa_report"](project_path=str(tmp_path), output_path="out/")
     assert "Wrote report to:" in res
 
     p = tmp_path / "out" / "qa_report.txt"
@@ -41,7 +45,8 @@ def test_qa_report_writes_to_directory(tmp_path: Path, monkeypatch):
     assert p.read_text(encoding="utf-8") == "REPORT"
 
 
-def test_qa_report_writes_to_explicit_file(tmp_path: Path, monkeypatch):
+@pytest.mark.asyncio
+async def test_qa_report_writes_to_explicit_file(tmp_path: Path, monkeypatch):
     from mcp_server import tools as tools_mod
 
     fake = FakeMCP()
@@ -50,7 +55,8 @@ def test_qa_report_writes_to_explicit_file(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(tools_mod, "build_runner", lambda fail_fast: DummyRunner())
     monkeypatch.setattr(tools_mod, "build_reporter", lambda: DummyReporter())
 
-    res = fake.tools["qa_report"](project_path=str(tmp_path), output_path="out/custom.md")
+    # Await the async qa_report tool handler
+    res = await fake.tools["qa_report"](project_path=str(tmp_path), output_path="out/custom.md")
     assert "Wrote report to:" in res
 
     p = tmp_path / "out" / "custom.md"

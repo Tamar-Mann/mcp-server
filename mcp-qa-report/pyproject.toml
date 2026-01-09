@@ -21,11 +21,13 @@ qa-report-mcp = "mcp_server.server:main"
 
 [dependency-groups]
 dev = [
-    "pytest>=9.0.2",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24.0",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+asyncio_mode = "auto"
 
 [tool.uv]
 package = true

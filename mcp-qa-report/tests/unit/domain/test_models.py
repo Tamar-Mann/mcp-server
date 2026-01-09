@@ -1,10 +1,10 @@
 from domain.models import CheckStatus, CheckResult
 
 
-def test_check_status_values_are_emojis():
-    assert CheckStatus.PASS.value == "✅"
-    assert CheckStatus.WARN.value == "⚠️"
-    assert CheckStatus.FAIL.value == "❌"
+def test_check_status_values_are_ascii():
+    assert CheckStatus.PASS.value == "PASS"
+    assert CheckStatus.WARN.value == "WARN"
+    assert CheckStatus.FAIL.value == "FAIL"
 
 
 def test_check_result_dataclass():

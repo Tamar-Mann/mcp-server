@@ -37,6 +37,10 @@ def _command_from_entrypoint(entrypoint: Any) -> list[str] | None:
     if not ep:
         return None
 
+    # Using 'uv run' ensures the correct virtual environment is used
+    # even if we are running from a different project context.
+    base_cmd = ["uv", "run", "python"]
+
     # "pkg.mod:main"
     if ":" in ep:
         module, func = ep.split(":", 1)
@@ -45,16 +49,16 @@ def _command_from_entrypoint(entrypoint: Any) -> list[str] | None:
         if not module or not func:
             return None
 
-        # Run callable directly (works great for FastMCP "main()")
+        # Run callable directly
         code = (
             "import importlib;"
             f"m=importlib.import_module('{module}');"
             f"getattr(m,'{func}')()"
         )
-        return [sys.executable, "-c", code]
+        return [*base_cmd, "-c", code]
 
     # "pkg.mod" only
-    return [sys.executable, "-m", ep]
+    return [*base_cmd, "-m", ep]
 
 
 def detect_mcp_command(project_path: str) -> list[str] | None:
@@ -78,15 +82,23 @@ def detect_mcp_command(project_path: str) -> list[str] | None:
 
                 cmd = server.get("command")
                 args = server.get("args", [])
+                
                 if isinstance(cmd, str):
                     if not isinstance(args, list):
                         args = []
                     args = [str(a) for a in args]
+                    
+                    # If it's a python command, wrap it with uv run
+                    # Handles "python", "python3", or absolute paths like "C:\...\python.exe"
+                    low_cmd = cmd.lower()
+                    if low_cmd in ("python", "python3") or low_cmd.endswith("python.exe"):
+                        return ["uv", "run", "python", *args]
+                        
                     return [cmd, *args]
             except Exception:
                 pass
 
-    # 1) pyproject.toml (Python) - GENERIC
+    # 1) pyproject.toml (Python)
     pyproject = root / "pyproject.toml"
     if pyproject.exists():
         try:
@@ -117,7 +129,6 @@ def detect_mcp_command(project_path: str) -> list[str] | None:
             if isinstance(scripts, dict):
                 if "start" in scripts:
                     return ["npm", "run", "start"]
-                # fallback: try dev
                 if "dev" in scripts:
                     return ["npm", "run", "dev"]
         except Exception:

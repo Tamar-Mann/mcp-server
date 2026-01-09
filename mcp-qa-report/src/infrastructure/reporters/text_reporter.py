@@ -7,6 +7,11 @@ followed by a short summary footer.
 import json
 from domain.models import CheckResult, CheckStatus
 
+STATUS_ICON = {
+    CheckStatus.PASS: "✅",
+    CheckStatus.WARN: "⚠️",
+    CheckStatus.FAIL: "❌",
+}
 class TextReporter:
     """
     Renders a list of CheckResult objects as a plain-text checklist report.
@@ -15,8 +20,8 @@ class TextReporter:
         lines = []
 
         for r in results:
-            status = r.status.value
-            lines.append(f"{status} {r.name}")
+            icon = STATUS_ICON[r.status]
+            lines.append(f"{icon} {r.name}")
             lines.append(f"   ↳ {r.message}")
 
         summary = self._summary(results)
